@@ -67,25 +67,56 @@ def _set_cookie(cookie_filename):
         config.settings.cookies = '; '.join(cookies)
 
 
-class RS_Server(object):
-
-    class Settings(object):
-        pass
+class Settings(object):
+    pass
 
 
-    def __init__(self, server_params):
-        for param_name, param_value in server_params.items():
+class RS_Base_Instance(object):
+
+    def __init__(self, params):
+        for param_name, param_value in params.items():
             self.__setattr__(param_name, param_value)
 
-        self.__fill_attrs('%s/settings' % self.href, 'settings')
-        self.__fill_attrs('%s/' % self.deployment_href, 'deployment')
+    def _fill_attrs(self, info_url, attr_name_set):
+        response = _request('%s?format=js' % info_url, prepend_api_base=False)
+        try:
+            tmp = json.loads(response.content)
+        except json.JSONError:
+            print 'Cannot process the following response:'
+            print '--------------------------------'
+            print response.content
+            print '--------------------------------'
+
+        else:
+            if isinstance(tmp, dict):
+                self.__setattr__(attr_name_set, Settings())
+                for set_name, set_value in tmp.items():
+                    self.__getattribute__(attr_name_set).__setattr__(set_name, set_value)
+            elif isinstance(tmp, list):
+                self.__setattr__(attr_name_set, [])
+                for tmp_dict in tmp:
+                    settings = Settings()
+                    for set_name, set_value in tmp_dict.items():
+                        settings.__setattr__(set_name, set_value)
+                    self.__getattribute__(attr_name_set).append(settings)
 
 
-    def __fill_attrs(self, info_url, attr_name_set):
-        tmp = json.loads(_request('%s?format=js' % info_url, prepend_api_base=False).content)
-        self.__setattr__(attr_name_set, self.Settings())
-        for set_name, set_value in tmp.items():
-            self.__getattribute__(attr_name_set).__setattr__(set_name, set_value)
+class RS_Server(RS_Base_Instance):
+
+    def __init__(self, server_params):
+        super(RS_Server, self).__init__(server_params)
+
+        self._fill_attrs('%s/settings' % self.href, 'settings')
+        self._fill_attrs('%s/' % self.deployment_href, 'deployment')
+
+
+class RS_Array(RS_Base_Instance):
+
+    def __init__(self, array_params):
+        super(RS_Array, self).__init__(array_params)
+
+        self._fill_attrs('%s/instances' % self.href, 'instances')
+        self._fill_attrs('%s/' % self.deployment_href, 'deployment')
 
 
 
@@ -210,6 +241,16 @@ def find_server(nickname):
     return servers[0] if len(servers) else None
 
 
+def response_to_objects(response, obj):
+    try:
+        json_content = json.loads(response.content)
+    except json.JSONError:
+        print response.content
+        raise Exception('Can not process content as json data')
+
+    return map(lambda x: obj(x), json_content)
+
+
 def servers_by_tag(tag):
     '''
     Finds servers based on tag.
@@ -219,13 +260,15 @@ def servers_by_tag(tag):
     '''
 
     response = _request('/tags/search.js?resource_type=ec2_instance&tags=%s' % tag)
-    try:
-        servers = json.loads(response.content)
-    except json.JSONError:
-        print response.content
-        raise Exception('Can not process content as json data')
 
-    return map(lambda x: RS_Server(x), servers)
+    return response_to_objects(response, RS_Server)
+
+
+def arrays(ip):
+    
+    response = _request('/server_arrays/?format=js')
+
+    return response_to_objects(response, RS_Array)
 
 
 def _lookup_server(server_href, nickname):
