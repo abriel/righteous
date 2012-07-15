@@ -67,6 +67,28 @@ def _set_cookie(cookie_filename):
         config.settings.cookies = '; '.join(cookies)
 
 
+class RS_Server(object):
+
+    class Settings(object):
+        pass
+
+
+    def __init__(self, server_params):
+        for param_name, param_value in server_params.items():
+            self.__setattr__(param_name, param_value)
+
+        self.__fill_attrs('%s/settings' % self.href, 'settings')
+        self.__fill_attrs('%s/' % self.deployment_href, 'deployment')
+
+
+    def __fill_attrs(self, info_url, attr_name_set):
+        tmp = json.loads(_request('%s?format=js' % info_url, prepend_api_base=False).content)
+        self.__setattr__(attr_name_set, self.Settings())
+        for set_name, set_value in tmp.items():
+            self.__getattribute__(attr_name_set).__setattr__(set_name, set_value)
+
+
+
 def init(account_id, username=None, password=None, cookie_filename=None, **kwargs):
     """
     Initialises righteous configuration
@@ -186,6 +208,24 @@ def find_server(nickname):
 
     servers = json.loads(response.content)
     return servers[0] if len(servers) else None
+
+
+def servers_by_tag(tag):
+    '''
+    Finds servers based on tag.
+
+    :param tag: tag which attached to server to lookup
+
+    '''
+
+    response = _request('/tags/search.js?resource_type=ec2_instance&tags=%s' % tag)
+    try:
+        servers = json.loads(response.content)
+    except json.JSONError:
+        print response.content
+        raise Exception('Can not process content as json data')
+
+    return map(lambda x: RS_Server(x), servers)
 
 
 def _lookup_server(server_href, nickname):
