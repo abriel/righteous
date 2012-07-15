@@ -8,6 +8,7 @@ Implements the RightScale API for EC2 instance management.
 
 from . import config
 import sys
+import os
 import base64
 # HACK: to allow setup.py to import __version__ from righteous/__init__.py
 try:
@@ -46,19 +47,60 @@ def _request(path, method='GET', body=None, headers={}, prepend_api_base=True):
         config=config.settings.requests_config or {})
 
 
-def init(username, password, account_id, **kwargs):
+def _set_cookie(cookie_filename):
+    if not os.path.exists(cookie_filename):
+        raise Exception('Can not open cookie filename: %s' % cookie_filename)
+
+    cookies = []
+    fd = file(cookie_filename)
+    for line in fd.readlines():
+        try:
+            cookie_name, cookie_value = line.split()[5:7]
+        except ValueError:
+            pass
+        else:
+            cookies.append('%s=%s' % (cookie_name, cookie_value))
+
+    fd.close()
+
+    if cookies:
+        config.settings.cookies = '; '.join(cookies)
+
+
+def init(account_id, username=None, password=None, cookie_filename=None, **kwargs):
     """
     Initialises righteous configuration
 
     :param username: String of a Rightscale username
     :param password: String of the user's password
-    :param account_id: String of the Rightscale account_id
+    :param account_id: String of the Rightscale account_id or path to file like rs_api_creds.sh
+    :param cookie_filename: Path to file like rs_api_cookie.txt
     :params kwargs: Key word arguments for additional configuration
     """
 
-    if not username or not password or not account_id:
-        raise Exception('Username, password and account_id are '
-            'required parameters')
+    if not account_id:
+        raise Exception('account_id is required parameter')
+
+    if not username:
+        if not cookie_filename:
+            raise Exception('username or cookie_filename is required parameter')
+        _set_cookie(cookie_filename)
+
+    if not account_id.isdigit():
+        if os.path.exists(account_id):
+            fd = file(account_id)
+            for line in fd.readlines():
+                try:
+                    rs_opt_name, rs_opt_value = line.strip().split('=')
+                except ValueError:
+                    raise Exception('Can not process accound_id')
+
+                if rs_opt_name == 'rs_api_account_id':
+                    account_id = rs_opt_value
+                    break
+
+            fd.close()
+
 
     config.settings.username = username
     config.settings.password = password
