@@ -122,7 +122,7 @@ class RS_Array(RS_Base_Instance):
 
 
 
-def init(account_id, username=None, password=None, cookie_filename=None, **kwargs):
+def init(username, password=None, account_id=None, **kwargs):
     """
     Initialises righteous configuration
 
@@ -133,29 +133,25 @@ def init(account_id, username=None, password=None, cookie_filename=None, **kwarg
     :params kwargs: Key word arguments for additional configuration
     """
 
-    if not account_id:
-        raise Exception('account_id is required parameter')
-
     if not username:
-        if not cookie_filename:
-            raise Exception('username or cookie_filename is required parameter')
-        _set_cookie(cookie_filename)
+        raise Exception('username is required parameter')
 
-    if not account_id.isdigit():
-        if os.path.exists(account_id):
-            fd = file(account_id)
-            for line in fd.readlines():
-                try:
-                    rs_opt_name, rs_opt_value = line.strip().split('=')
-                except ValueError:
-                    raise Exception('Can not process accound_id')
+    if os.path.exists(username):
+        fd = file(username)
+        for line in fd.readlines():
+            try:
+                rs_opt_name, rs_opt_value = line.strip().split('=')
+            except ValueError:
+                raise Exception('Can not process username')
 
-                if rs_opt_name == 'rs_api_account_id':
-                    account_id = rs_opt_value
-                    break
+            if rs_opt_name == 'rs_api_account_id':
+                account_id = rs_opt_value
+            elif rs_opt_name == 'rs_api_user':
+                username = rs_opt_value.strip('"')
+            elif rs_opt_name == 'rs_api_password':
+                password = rs_opt_value.strip('"')
 
-            fd.close()
-
+        fd.close()
 
     config.settings.username = username
     config.settings.password = password
