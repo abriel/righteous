@@ -264,7 +264,7 @@ def servers_by_tag(tag):
     return response_to_objects(response, RS_Server)
 
 
-def arrays(ip):
+def arrays():
     
     response = _request('/server_arrays/?format=js')
 
