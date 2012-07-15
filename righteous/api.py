@@ -91,12 +91,14 @@ class RS_Base_Instance(object):
             if isinstance(tmp, dict):
                 self.__setattr__(attr_name_set, Settings())
                 for set_name, set_value in tmp.items():
+                    set_name = set_name.replace('-', '_')
                     self.__getattribute__(attr_name_set).__setattr__(set_name, set_value)
             elif isinstance(tmp, list):
                 self.__setattr__(attr_name_set, [])
                 for tmp_dict in tmp:
                     settings = Settings()
                     for set_name, set_value in tmp_dict.items():
+                        set_name = set_name.replace('-', '_')
                         settings.__setattr__(set_name, set_value)
                     self.__getattribute__(attr_name_set).append(settings)
 
@@ -242,13 +244,21 @@ def find_server(nickname):
 
 
 def response_to_objects(response, obj):
+    if not response.content:
+        return []
+
     try:
         json_content = json.loads(response.content)
     except json.JSONError:
         print response.content
-        raise Exception('Can not process content as json data')
+        print '-------------------------------'
+        print 'Can not process content as json data'
+        return []
 
-    return map(lambda x: obj(x), json_content)
+    if isinstance(json_content, list):
+        return map(lambda x: obj(x), json_content)
+
+    return obj(json_content)
 
 
 def servers_by_tag(tag):
@@ -259,16 +269,19 @@ def servers_by_tag(tag):
 
     '''
 
-    response = _request('/tags/search.js?resource_type=ec2_instance&tags=%s' % tag)
-
-    return response_to_objects(response, RS_Server)
+    return response_to_objects(_request('/tags/search.js?resource_type=ec2_instance&tags=%s' % tag), RS_Server)
 
 
 def arrays():
-    
-    response = _request('/server_arrays/?format=js')
+    return response_to_objects(_request('/server_arrays/?format=js'), RS_Array)
 
-    return response_to_objects(response, RS_Array)
+
+def servers():
+    return response_to_objects(_request('/servers.js'), RS_Server)
+
+
+def server_by_id(sid):
+    return response_to_objects(_request('/servers/%s.js' % sid ), RS_Server)
 
 
 def _lookup_server(server_href, nickname):
